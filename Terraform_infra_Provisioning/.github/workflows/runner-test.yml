@@ -1,0 +1,27 @@
+name: Self Hosted Runner Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  test-runner:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repositorys
+        uses: actions/checkout@v4
+
+      - name: Check runner
+        run: |
+          echo "GitHub Action is running on my Ubuntu VM"
+          echo "Hostname:"
+          hostname
+          echo "OS:"
+          uname -a
+          echo "Ollama version:"
+          ollama --version
+
+      - name: Check AI model
+        run: |
+          ollama list

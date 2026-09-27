@@ -1,0 +1,135 @@
+name: AI PR Reviews
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ai-review:
+    runs-on: self-hosted
+
+    steps:
+      - name: Get PR diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} \
+            -H "Accept: application/vnd.github.v3.diff" \
+            > pr.diff
+
+          echo "PR diff downloaded."
+          wc -l pr.diff
+
+      - name: Run AI review
+        run: |
+          python3 <<'PY'
+          import json
+          import urllib.request
+
+          with open("pr.diff", "r", encoding="utf-8", errors="ignore") as f:
+              diff = f.read()
+
+          if not diff.strip():
+              review = "No changes found to review."
+          else:
+              prompt = f"""
+          You are a senior Terraform and Azure engineer reviewing a Pull Request.
+
+          This Pull Request is from the feature branch into main.
+
+          Review ONLY the changes in the PR diff below.
+
+          Focus especially on:
+
+          1. Terraform configuration errors
+          2. Azure security issues
+          3. Public network exposure
+          4. IAM/RBAC problems
+          5. Hard-coded secrets or credentials
+          6. Dangerous infrastructure changes
+          7. Resource replacement or destruction risks
+          8. Incorrect variables, outputs or dependencies
+          9. Terraform best practices
+          10. Maintainability and readability
+
+          Rules:
+
+          - Do NOT invent problems.
+          - Only report issues supported by the diff.
+          - Prioritize real problems over style preferences.
+          - For every issue explain:
+            - Severity
+            - File/location if available
+            - Problem
+            - Why it matters
+            - Suggested fix
+          - If no significant issue exists, clearly say that.
+
+          Use these severity levels:
+
+          CRITICAL
+          HIGH
+          MEDIUM
+          LOW
+
+          PR DIFF:
+
+          {diff}
+          """
+
+              payload = json.dumps({
+                  "model": "qwen2.5-coder:3b",
+                  "prompt": prompt,
+                  "stream": False
+              }).encode("utf-8")
+
+              request = urllib.request.Request(
+                  "http://127.0.0.1:11434/api/generate",
+                  data=payload,
+                  headers={"Content-Type": "application/json"},
+                  method="POST"
+              )
+
+              with urllib.request.urlopen(request, timeout=600) as response:
+                  result = json.loads(
+                      response.read().decode("utf-8")
+                  )
+
+              review = result.get(
+                  "response",
+                  "AI did not return a review."
+              )
+
+          with open("review.md", "w", encoding="utf-8") as f:
+              f.write(review)
+
+          print(review)
+          PY
+
+      - name: Post AI review to PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## 🤖 AI Terraform Review"
+            echo
+            cat review.md
+            echo
+            echo "---"
+            echo "Reviewed locally using Qwen2.5-Coder."
+          } > review-comment.md
+
+          gh pr comment \
+            "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body-file review-comment.md
