@@ -1,0 +1,5 @@
+# Terraform की लोकल फ़ाइलें और प्रोवाइडर्स को इग्नोर करें
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
