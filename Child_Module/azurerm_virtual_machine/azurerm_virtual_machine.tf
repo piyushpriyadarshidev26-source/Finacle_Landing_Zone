@@ -8,8 +8,10 @@ resource "azurerm_linux_virtual_machine" "vm" {
   resource_group_name = each.value.resource_group_name
   location            = each.value.location
   size                = each.value.size
-  admin_username      = each.value.admin_username
-  admin_password      =each.value.admin_password
+  # admin_username      = data.azurerm_key_vault_secret.usrname.value
+  # admin_password      =data.azurerm_key_vault_secret.pswd.value
+   admin_username      = each.value.admin_username
+  admin_password      =  each.value.admin_password
   disable_password_authentication=false
   network_interface_ids = [
     data.azurerm_network_interface.dnic[each.key].id,

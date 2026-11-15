@@ -1,0 +1,148 @@
+pool: Lelo
+
+variables: 
+- group: Connection
+ 
+
+parameters:
+  - name: environment
+    displayName: environment
+    type: string
+    # default: dev
+    values: 
+    - Preprod
+    - dev
+    - prod
+
+trigger:
+- main
+- features/*
+
+stages:
+- stage: 'Build_And_Validate'
+  dependsOn: []
+  displayName: Init
+  jobs:
+  - job: Build
+    displayName: ${{parameters.environment}} 
+    steps: 
+    - task: TerraformInstaller@1
+      displayName: 'Installating Terraform'
+      inputs:
+        terraformVersion: 'latest'
+
+    - task: TerraformTask@5
+      displayName: init
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/${{parameters.environment}}'
+        backendServiceArm: '$(backendServiceArm)'
+        backendAzureRmStorageAccountName: '$(backendAzureRmStorageAccountName)'
+        backendAzureRmContainerName: '$(backendAzureRmContainerName)'
+        backendAzureRmKey: '$(backendAzureRmKey)'
+    - task: TerraformTask@5
+      displayName: Validate
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/${{parameters.environment}}'
+
+-  stage: Scan
+   dependsOn: 'Build_And_Validate'
+   jobs:
+   - job: 'Scan'
+     steps:
+     - task: PowerShell@2
+       displayName: gitleaks
+       inputs:
+         targetType: 'inline'
+         script: 'gitleaks detect --source'
+
+         
+     - task: PowerShell@2
+       inputs:
+         targetType: 'inline'
+         script: 'tfsec'
+         errorActionPreference: 'continue'
+- stage: Plan
+  dependsOn: 'Build_And_Validate' 
+  jobs:
+  - job: Install
+    displayName: Plan
+    steps:
+    - task: TerraformInstaller@1
+      displayName: "Installing Terraform"
+      inputs:
+        terraformVersion: 'latest'
+    - task: TerraformTask@5
+      displayName: Init
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(workingDirectory)'
+        backendServiceArm: '$(backendServiceArm)'
+        backendAzureRmStorageAccountName: '$(backendAzureRmStorageAccountName)'
+        backendAzureRmContainerName: '$(backendAzureRmContainerName)'
+        backendAzureRmKey: '$(backendAzureRmKey)'
+
+
+ 
+    - task: TerraformTask@5
+      displayName: Plan
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(workingDirectory)'
+        environmentServiceNameAzureRM: '$(environmentServiceNameAzureRM)'
+
+- stage: Manual_Approver
+  dependsOn: 'Build_And_Validate'
+  jobs:
+  - job: Manual_Approver
+    pool: server
+    displayName: Manual_Approver
+    steps:
+    - task: ManualValidation@1
+      displayName: Manual_Validation
+      inputs:
+        notifyUsers: 'piyushpriyadarshidev26@gmail.com'
+        approvers: 'piyushpriyadarshidev26@gmail.com'
+
+
+- stage: Apply
+  dependsOn: 
+  - 'Build_And_Validate'
+  - 'Plan'
+  - 'Manual_Approver'
+  displayName: Infra_Provisioning
+  jobs:
+  - job: Init
+    displayName: ${{parameters.environment}}
+    steps:
+    - task: TerraformInstaller@1
+      displayName: "Installing Terraform"
+      inputs:
+        terraformVersion: 'latest'
+    - task: TerraformTask@5
+      displayName: Init
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(workingDirectory)'
+        backendServiceArm: '$(backendServiceArm)'
+        backendAzureRmStorageAccountName: '$(backendAzureRmStorageAccountName)'
+        backendAzureRmContainerName: '$(backendAzureRmContainerName)'
+        backendAzureRmKey: '$(backendAzureRmKey)'
+
+  - job: Apply
+    dependsOn: Init
+    displayName: ${{parameters.environment}}
+    steps:
+    - task: TerraformTask@5
+      displayName: Apply
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        environmentServiceNameAzureRM: '$(environmentServiceNameAzureRM)'
+

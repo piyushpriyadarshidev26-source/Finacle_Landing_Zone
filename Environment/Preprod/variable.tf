@@ -5,5 +5,6 @@ variable "snet"{}
 variable "pipk"{}
 variable "nic"{}
 variable "bkvm"{}
+variable "prvt"{}
 
 

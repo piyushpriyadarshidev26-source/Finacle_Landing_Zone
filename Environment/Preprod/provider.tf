@@ -6,10 +6,17 @@ version="4.80.0"
 }
 }
  backend "azurerm"{
- storage_account_name="piplinessd"
- resource_group_name="Sandook"
- container_name="fis"
- key="fistfstated"
+<<<<<<< HEAD
+ storage_account_name="dolo650"
+ resource_group_name="Dimak"
+ container_name="kechua"
+ key="kechua.tfstate"
+=======
+ storage_account_name="intel786"
+ resource_group_name="Mandook"
+ container_name="parameterpipeline"
+ key="belcha.tfstate2"
+>>>>>>> 011091058590b3c8e2bca30c6b1797b158f7f285
  }
 }
 

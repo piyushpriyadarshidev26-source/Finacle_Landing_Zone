@@ -1,0 +1,156 @@
+pool: Leloagent #Private pool declare like this
+variables:
+  - group: leloInfraSecret 
+
+
+trigger:
+- main
+-  feature/fin
+
+
+stages:
+  - stage: Build
+    jobs:
+    - job: Build
+      displayName: 'Build'
+      steps:  
+      - task: TerraformInstaller@1
+        displayName: Installer1
+        inputs:
+          terraformVersion: 'latest'
+
+
+      - task: TerraformTask@5
+        displayName: init
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/Preprod'
+          backendServiceArm: 'leloconnection'
+          backendAzureRmStorageAccountName: 'piplinessd'
+          backendAzureRmContainerName: 'fis'
+          backendAzureRmKey: 'fistfstatez'
+     
+      - task: TerraformTask@5
+        displayName: 'validate'
+        inputs:
+          provider: 'azurerm'
+          command: 'validate'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/Preprod'
+
+  - stage: Scan 
+    jobs:
+    - job: Scan
+      displayName: Scan      
+      steps:
+      - task: PowerShell@2
+        displayName: 'tflint'
+        inputs:
+          targetType: 'inline'
+          script: |
+            tflint /recursive 
+             tflint /force
+      # - task: TerraformTask@5
+      #   inputs:
+      #     provider: 'azurerm'
+      #     command: 'init'
+      #     workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/Preprod'
+      #     backendServiceArm: 'leloconnection'
+      #     backendAzureRmStorageAccountName: 'piplinessd'
+      #     backendAzureRmContainerName: 'fis'
+      #     backendAzureRmKey: 'fistfstatez'
+
+      
+      
+   
+      - task: PowerShell@2
+        displayName: tfsec
+        inputs:
+          targetType: 'inline'
+          script: 'tfsec  --tfvars-file $(Build.SourcesDirectory)/Environment/Preprod/terraform.tfvars --soft-fail'
+      - task: PowerShell@2
+        displayName: 'gitleaks'
+        inputs:
+          targetType: 'inline'
+          script: 'gitleaks detect --source=$(Build.SourcesDirectory) --verbose'
+
+  - stage: Plan
+    jobs:
+    - job: Plan
+      steps:
+      - task: TerraformInstaller@1
+        displayName: 'Installer2'
+        inputs:
+          terraformVersion: 'latest'
+      
+      - task: TerraformTask@5
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/Preprod'
+          backendServiceArm: 'leloconnection'
+          backendAzureRmStorageAccountName: 'piplinessd'
+          backendAzureRmContainerName: 'fis'
+          backendAzureRmKey: 'fistfstatez'
+      - task: TerraformTask@5
+        displayName: 'Plan'
+        inputs:
+          provider: 'azurerm'
+          command: 'plan'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/Preprod'
+          environmentServiceNameAzureRM: 'leloconnection'
+
+
+      # - task: PowerShell@2
+      #   continueOnError: true
+      #   env:
+      #     INFRACOST_CLI_AUTHENTICATION_TOKEN: $(infracostapikey)
+
+      #   inputs:
+      #     targetType: 'inline'
+      #     script: 'infracost scan $(Build.SourcesDirectory)/Child_Module --option infracost/terraform.tfvars=yes '
+           
+         
+  - stage: ManualApproval
+    jobs:
+    - job: ManualApproval
+      # dependsOn: Plan
+      displayName: Approval
+      pool: server
+      steps:
+      - task: ManualValidation@1
+        displayName: 'Manual Validation'
+        inputs:
+          notifyUsers: 'PIYUSH@harshsharma000110gmail.onmicrosoft.com'
+          approvers: 'PIYUSH@harshsharma000110gmail.onmicrosoft.com'
+          onTimeout: 'resume'
+  - stage: Apply
+    jobs:
+    - job: Apply
+      # dependsOn: 
+      # - Build
+      # - Plan
+      condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/main'))
+      displayName: Apply
+      steps:
+      - task: TerraformInstaller@1
+        inputs:
+          terraformVersion: 'latest'
+      - task: TerraformTask@5
+        displayName: 'Installer3'
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/Preprod'
+          backendServiceArm: 'leloconnection'
+          backendAzureRmStorageAccountName: 'piplinessd'
+          backendAzureRmContainerName: 'fis'
+          backendAzureRmKey: 'fistfstatez'
+      - task: TerraformTask@5
+        displayName: Apply
+        inputs:
+          provider: 'azurerm'
+          command: 'apply'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/Environment/Preprod'
+          environmentServiceNameAzureRM: 'leloconnection'
+        

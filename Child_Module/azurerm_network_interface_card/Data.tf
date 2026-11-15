@@ -14,6 +14,8 @@ data "azurerm_subnet" "dsub" {
   resource_group_name  = each.value.resource_group_name
 }
 
+
+
 # output "subnet_id" {
 #   value = data.azurerm_subnet.example.id
 # }

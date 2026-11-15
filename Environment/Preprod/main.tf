@@ -11,7 +11,7 @@ module "storage_account"{
 
 module "virtual_network"{
     source="../../Child_Module/azurerm_virtual_network"
-    depends_on=[module.resource_group]
+    depends_on=[module.resource_group,module.storage_account]
     vnet=var.vnet
 }
 
@@ -37,4 +37,10 @@ module "virtual_machine"{
     source="../../Child_Module/azurerm_virtual_machine"
     depends_on=[module.resource_group,module.virtual_network,module.subnet,module.publicip,module.network_interface_card]
     bkvm=var.bkvm
+}
+
+module "azurerm_private_endpoint"{
+    source="../../Child_Module/azurerm_private_end_point"
+    depends_on=[module.resource_group,module.virtual_network,module.subnet,module.publicip,module.network_interface_card,module.virtual_machine]
+    prvt=var.prvt
 }
